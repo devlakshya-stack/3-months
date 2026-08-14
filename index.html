@@ -1,0 +1,693 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#07060a">
+  <title>For Satviki — three little months</title>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;500;600;700&family=DM+Sans:wght@400;500;600&family=Playfair+Display:ital,wght@0,500;0,600;1,500&display=swap" rel="stylesheet">
+
+  <link rel="stylesheet" href="styles.css">
+
+  <!-- Used by the co-op photo booth -->
+  <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
+</head>
+
+<body>
+
+  <!-- INTRO -->
+  <div id="intro" class="intro">
+    <div class="intro-noise"></div>
+    <canvas id="heartCanvas"></canvas>
+
+    <div class="intro-copy">
+      <p class="eyebrow">A small thing made for</p>
+      <h1>Satviki</h1>
+
+      <p>
+        three months, a hundred tiny memories,<br>
+        and still so much left to discover.
+      </p>
+
+      <button id="enterBtn" class="button button-light">
+        come in <span>♡</span>
+      </button>
+    </div>
+  </div>
+
+  <!-- HEADER -->
+  <header class="site-header">
+    <a class="brand" href="#home">S<span>♡</span></a>
+
+    <nav>
+      <a href="#booth">booth</a>
+      <a href="#notes">notes</a>
+      <a href="#story">our story</a>
+      <a href="#tickets">tickets</a>
+      <a href="#memories">memories</a>
+    </nav>
+
+    <button id="musicToggle" class="music-pill" aria-label="Play our song">
+      <span class="music-dot"></span>
+      <span id="musicText">our little song</span>
+      <b>▶</b>
+    </button>
+  </header>
+
+  <main id="home">
+
+    <!-- HERO -->
+    <section class="hero section">
+
+      <div class="hero-copy">
+        <p class="eyebrow">15 august · 2026</p>
+
+        <h2>
+          Happy three months,<br>
+          <em>Satviki.</em>
+        </h2>
+
+        <p class="lede">
+          I didn't know three months could hold this many little moments.
+          So I made somewhere to keep a few of them.
+        </p>
+
+        <div class="hero-actions">
+          <a class="button" href="#booth">
+            make a memory <span>→</span>
+          </a>
+
+          <a class="text-link" href="#notes">
+            read the notes
+          </a>
+        </div>
+      </div>
+
+      <div class="hero-polaroid">
+        <div class="photo-placeholder">
+          <span>
+            <img
+                src="hero.jpg"
+                alt="A memory of Satviki and me"
+            ><br>
+            
+          </span>
+        </div>
+
+        <p>somewhere between then &amp; now</p>
+      </div>
+    </section>
+
+
+    <!-- PHOTO BOOTH -->
+    <section id="booth" class="section booth-section">
+
+      <div class="section-heading">
+        <p class="eyebrow">01 · the little photo booth</p>
+
+        <h2>Keep one for later.</h2>
+
+        <p>
+          Use the camera, add a little film, write something silly,
+          and take it home with you.
+        </p>
+      </div>
+
+      <div class="booth-wrap">
+
+        <!-- CAMERA -->
+        <div class="camera-card">
+
+          <div class="camera-top">
+            <span>
+              LIVE / <b id="cameraStatus">READY</b>
+            </span>
+
+            <span>♡ SATVIKI CAM</span>
+          </div>
+
+          <div class="camera-view">
+
+            <video
+              id="video"
+              autoplay
+              muted
+              playsinline
+            ></video>
+
+            <canvas id="photoCanvas" hidden></canvas>
+
+            <img
+              id="uploadPreview"
+              alt="Selected photo"
+              hidden
+            >
+
+            <div id="cameraPlaceholder">
+              <span>♡</span>
+
+              <small>
+                open the camera<br>
+                or choose a photo
+              </small>
+            </div>
+
+            <div id="countdown" class="countdown"></div>
+
+            <div id="flash" class="flash"></div>
+
+          </div>
+
+          <div class="camera-controls">
+
+            <button id="startCamera" class="button small">
+              open camera
+            </button>
+
+            <label class="button small secondary">
+              upload photo
+
+              <input
+                id="photoUpload"
+                type="file"
+                accept="image/*"
+                hidden
+              >
+            </label>
+
+            <button
+              id="captureBtn"
+              class="shutter"
+              aria-label="Take photo"
+            ></button>
+
+          </div>
+
+        </div>
+
+
+        <!-- TOOL PANEL -->
+        <aside class="booth-tools">
+
+          <div class="tool-title">
+            make it yours
+          </div>
+
+
+          <!-- CO-OP -->
+          <div class="coop-panel">
+
+            <div class="coop-head">
+
+              <span class="coop-live-dot"></span>
+
+              <span>CO-OP BOOTH</span>
+
+              <b id="coopStatus">
+                offline
+              </b>
+
+            </div>
+
+            <p>
+              Bring Satviki into the same frame,
+              even when you're on different screens.
+            </p>
+
+            <div class="coop-actions">
+
+              <button
+                id="createRoom"
+                class="button small"
+              >
+                create room
+              </button>
+
+              <button
+                id="joinRoom"
+                class="button small secondary"
+              >
+                join room
+              </button>
+
+            </div>
+
+            <div class="room-row">
+
+              <input
+                id="roomCode"
+                maxlength="10"
+                placeholder="room code"
+              >
+
+              <button
+                id="copyRoom"
+                class="text-button"
+                type="button"
+              >
+                copy
+              </button>
+
+            </div>
+
+            <label class="sync-toggle">
+
+              <input
+                id="syncFilter"
+                type="checkbox"
+                checked
+              >
+
+              <span>
+                sync our filter
+              </span>
+
+            </label>
+
+            <div class="remote-mini">
+
+              <video
+                id="remoteVideo"
+                autoplay
+                playsinline
+                muted
+              ></video>
+
+              <div id="remotePlaceholder">
+                waiting for<br>
+                Satviki ♡
+              </div>
+
+            </div>
+
+          </div>
+
+
+          <!-- FILTERS -->
+          <div class="filter-label">
+            choose a filter
+          </div>
+
+          <div
+            class="filter-grid"
+            id="filterGrid"
+          ></div>
+
+
+          <!-- CAPTION -->
+          <div class="tool-row">
+
+            <label>
+              caption
+
+              <input
+                id="photoText"
+                type="text"
+                maxlength="28"
+                placeholder="3 months ♡"
+              >
+            </label>
+
+          </div>
+
+
+          <!-- STICKERS -->
+          <div
+            class="sticker-row"
+            id="stickerRow"
+          ></div>
+
+
+          <div class="booth-actions">
+
+            <button
+              id="stripBtn"
+              class="button secondary"
+            >
+              photo strip
+            </button>
+
+            <button
+              id="downloadBtn"
+              class="button"
+              disabled
+            >
+              download ♡
+            </button>
+
+          </div>
+
+          <p class="tiny">
+            Nothing leaves this browser.
+            Camera and downloads happen locally on your device.
+          </p>
+
+        </aside>
+
+      </div>
+
+    </section>
+
+
+    <!-- NOTES -->
+    <section id="notes" class="section notes-section">
+
+      <div class="section-heading centered">
+
+        <p class="eyebrow">
+          02 · things i notice
+        </p>
+
+        <h2>
+          A wall of little truths.
+        </h2>
+
+        <p>
+          Not the grand declarations.
+          The tiny things I hope you never stop doing.
+        </p>
+
+      </div>
+
+      <div
+        id="noteWall"
+        class="note-wall"
+      ></div>
+
+      <button
+        id="randomNote"
+        class="button centered-button"
+      >
+        pick one for me ♡
+      </button>
+
+    </section>
+
+
+    <!-- JAR -->
+    <section
+      id="jar"
+      class="section jar-section"
+    >
+
+      <div class="jar-art">
+
+        <div class="jar-lid"></div>
+
+        <div class="jar">
+
+          <div class="jar-glass"></div>
+
+          <div id="jarPapers"></div>
+
+        </div>
+
+        <div class="jar-label">
+          open when<br>
+          you need one
+        </div>
+
+      </div>
+
+
+      <div class="jar-copy">
+
+        <p class="eyebrow">
+          03 · a tiny jar
+        </p>
+
+        <h2>
+          For the days<br>
+          that need a note.
+        </h2>
+
+        <p>
+          Pick one without knowing what's inside.
+          Some are soft, some are silly, and some are just
+          here to remind you that you're loved.
+        </p>
+
+        <div
+          class="jar-categories"
+          id="jarCategories"
+        ></div>
+
+        <button
+          id="pickNote"
+          class="button"
+        >
+          pick a note <span>♡</span>
+        </button>
+
+      </div>
+
+    </section>
+
+
+    <!-- STORY -->
+    <section
+      id="story"
+      class="section story-section"
+    >
+
+      <div class="section-heading">
+
+        <p class="eyebrow">
+          04 · three months
+        </p>
+
+        <h2>
+          Our little timeline.
+        </h2>
+
+      </div>
+
+      <div
+        class="timeline"
+        id="timeline"
+      ></div>
+
+    </section>
+
+
+    <!-- TICKETS -->
+    <section
+      id="tickets"
+      class="section tickets-section"
+    >
+
+      <div class="section-heading centered">
+
+        <p class="eyebrow">
+          05 · valid forever, apparently
+        </p>
+
+        <h2>
+          Tickets for Satviki.
+        </h2>
+
+        <p>
+          Fifteen tiny excuses to make another memory.
+          Flip one. Keep the one you like.
+        </p>
+
+      </div>
+
+      <div class="ticket-toolbar">
+
+        <span id="ticketCount">
+          15 little tickets
+        </span>
+
+        <button
+          id="shuffleTickets"
+          class="text-button"
+        >
+          shuffle the stack ↻
+        </button>
+
+      </div>
+
+      <div
+        id="ticketGrid"
+        class="ticket-grid"
+      ></div>
+
+    </section>
+
+
+    <!-- MEMORIES -->
+    <section
+      id="memories"
+      class="section memories-section"
+    >
+
+      <div class="section-heading centered">
+
+        <p class="eyebrow">
+          06 · evidence
+        </p>
+
+        <h2>
+          A few places to put us.
+        </h2>
+
+        <p>
+          Replace these with your real photos
+          in <code>content.js</code>.
+          The frames are intentionally imperfect.
+        </p>
+
+      </div>
+
+      <div
+        id="gallery"
+        class="polaroid-grid"
+      ></div>
+
+    </section>
+
+
+    <!-- QUIZ -->
+    <section class="section quiz-section">
+
+      <div class="quiz-card">
+
+        <p class="eyebrow">
+          07 · very serious research
+        </p>
+
+        <h2>
+          How well do you know us?
+        </h2>
+
+        <p id="quizQuestion">
+          Ready?
+        </p>
+
+        <div
+          id="quizOptions"
+          class="quiz-options"
+        ></div>
+
+        <div
+          id="quizResult"
+          class="quiz-result"
+        ></div>
+
+      </div>
+
+    </section>
+
+
+    <!-- SECRET -->
+    <section class="section secret-section">
+
+      <button
+        id="secretTrigger"
+        class="secret-trigger"
+      >
+        psst... there's something here
+        <span>✦</span>
+      </button>
+
+    </section>
+
+
+    <!-- FINAL -->
+    <section id="final" class="final-section">
+
+      <div class="final-inner">
+
+        <p class="eyebrow">
+          08 · before you go
+        </p>
+
+        <h2>
+          Three months down.<br>
+          <em>So many little things to go.</em>
+        </h2>
+
+        <div class="final-photo">
+
+            <img
+                src="final.jpg"
+                alt="Our favourite memory"
+            >
+
+        </div>
+
+        <p class="final-letter">
+          Satviki, thank you for making ordinary days feel
+          a little less ordinary. For the conversations that
+          went on longer than planned, the laughs that came
+          from nowhere, and all the tiny things I probably
+          never say out loud enough. Three months is only a
+          beginning, but I'm really glad it's ours.
+        </p>
+
+        <div class="three-hearts">
+          ♡ &nbsp; ♥ &nbsp; ♡
+        </div>
+
+        <p class="closing">
+          here's to all the little moments still waiting for us.
+        </p>
+
+        <button
+          id="replay"
+          class="button button-light"
+        >
+          start again ♡
+        </button>
+
+      </div>
+
+    </section>
+
+  </main>
+
+
+  <!-- MODAL -->
+  <div
+    id="modal"
+    class="modal"
+    aria-hidden="true"
+  >
+
+    <div class="modal-backdrop"></div>
+
+    <div class="modal-card">
+
+      <button
+        class="modal-close"
+        id="modalClose"
+      >
+        ×
+      </button>
+
+      <div id="modalContent"></div>
+
+    </div>
+
+  </div>
+
+
+  <audio
+    id="song"
+    preload="none"
+  ></audio>
+
+
+  <!-- JS -->
+  <script src="content.js"></script>
+  <script src="camera.js"></script>
+  <script src="coop-booth.js"></script>
+  <script src="app.js"></script>
+
+</body>
+</html>
