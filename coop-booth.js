@@ -1,76 +1,128 @@
 (() => {
   'use strict';
 
-  const $ = (id) => document.getElementById(id);
+  /*
+    CO-OP PHOTO BOOTH
+    -----------------
+    This file is intentionally isolated from the rest
+    of the website.
 
-  const PREFIX = 'satviki-coop-';
+    If PeerJS/camera/network fails, the main website
+    continues working normally.
+  */
+
+  const $ = (id) => document.getElementById(id);
 
   let peer = null;
   let connection = null;
-  let mediaCall = null;
+  let call = null;
   let localStream = null;
 
   let roomCode = '';
   let isHost = false;
-
   let connected = false;
-  let connecting = false;
-  let captureRunning = false;
+  let destroyed = false;
 
   let myPhoto = null;
   let partnerPhoto = null;
 
+  let captureInProgress = false;
+
+  const PEER_PREFIX = 'satviki-room-';
+
 
   /* =====================================================
-     STATUS
+     UI
      ===================================================== */
 
   function setStatus(text, live = false) {
-    const status = $('coopStatus');
-    const dot = document.querySelector('.coop-live-dot');
+
+    const status =
+      $('coopStatus');
+
+    const dot =
+      document.querySelector(
+        '.coop-live-dot'
+      );
 
     if (status) {
       status.textContent = text;
     }
 
     if (dot) {
-      dot.classList.toggle('live', live);
+      dot.classList.toggle(
+        'live',
+        live
+      );
+    }
+  }
+
+
+  function getRoomInput() {
+    return $('roomCode');
+  }
+
+
+  function getRoomCode() {
+
+    return String(
+      getRoomInput()?.value || ''
+    )
+      .toUpperCase()
+      .replace(
+        /[^A-Z0-9]/g,
+        ''
+      )
+      .slice(0, 6);
+  }
+
+
+  function setRoomCode(code) {
+
+    const input =
+      getRoomInput();
+
+    if (input) {
+      input.value =
+        code;
     }
   }
 
 
   /* =====================================================
-     ROOM HELPERS
+     ROOM CODE
      ===================================================== */
 
-  function cleanCode(value) {
-    return String(value || '')
-      .toUpperCase()
-      .replace(/[^A-Z0-9]/g, '')
-      .slice(0, 6);
-  }
+  function generateRoomCode() {
 
-
-  function makeRoomCode() {
     const chars =
       'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 
-    let code = '';
+    let result = '';
 
     for (let i = 0; i < 6; i++) {
-      code += chars[
-        Math.floor(
-          Math.random() * chars.length
-        )
-      ];
+
+      result +=
+        chars[
+          Math.floor(
+            Math.random() *
+            chars.length
+          )
+        ];
+
     }
 
-    return code;
+    return result;
   }
 
 
-  function hostPeerId(code) {
-    return PREFIX + code.toLowerCase();
+  function roomPeerId(code) {
+
+    return (
+      PEER_PREFIX +
+      code.toLowerCase()
+    );
+
   }
 
 
@@ -78,7 +130,7 @@
      LOCAL CAMERA
      ===================================================== */
 
-  async function getLocalStream() {
+  async function getCamera() {
 
     if (localStream) {
       return localStream;
@@ -115,7 +167,7 @@
      REMOTE VIDEO
      ===================================================== */
 
-  function showRemoteStream(stream) {
+  function showRemoteVideo(stream) {
 
     const video =
       $('remoteVideo');
@@ -129,10 +181,12 @@
 
     if (!stream) {
 
-      video.srcObject = null;
+      video.srcObject =
+        null;
 
       if (placeholder) {
-        placeholder.hidden = false;
+        placeholder.hidden =
+          false;
       }
 
       return;
@@ -141,28 +195,32 @@
     video.srcObject =
       stream;
 
-    video.muted = true;
+    video.muted =
+      true;
 
-    video.playsInline = true;
+    video.playsInline =
+      true;
 
-    const playPromise =
+    if (placeholder) {
+      placeholder.hidden =
+        true;
+    }
+
+    const play =
       video.play();
 
     if (
-      playPromise &&
-      typeof playPromise.catch === 'function'
+      play &&
+      typeof play.catch ===
+      'function'
     ) {
-      playPromise.catch(() => {});
-    }
-
-    if (placeholder) {
-      placeholder.hidden = true;
+      play.catch(() => {});
     }
   }
 
 
   /* =====================================================
-     DATA CONNECTION
+     SAFE SEND
      ===================================================== */
 
   function send(data) {
@@ -182,7 +240,7 @@
 
     } catch (error) {
 
-      console.error(
+      console.warn(
         'Co-op data send failed:',
         error
       );
@@ -192,22 +250,26 @@
   }
 
 
-  function setupDataConnection(conn) {
+  /* =====================================================
+     DATA CONNECTION
+     ===================================================== */
 
-    connection = conn;
+  function setupConnection(conn) {
 
+    connection =
+      conn;
 
     conn.on(
       'open',
       () => {
 
-        connected = true;
+        connected =
+          true;
 
         setStatus(
           'connected',
           true
         );
-
 
         send({
           type: 'hello'
@@ -215,21 +277,21 @@
 
 
         /*
-          IMPORTANT:
-          Only the GUEST starts the media call.
-          The HOST only answers it.
-          This prevents both browsers from
-          creating calls simultaneously.
+          Only the guest starts the video call.
+          The host waits and answers.
         */
 
         if (!isHost) {
 
           setTimeout(
-            () => startGuestVideoCall(),
-            250
+            () => {
+              startGuestCall();
+            },
+            300
           );
 
         }
+
       }
     );
 
@@ -244,13 +306,16 @@
       'close',
       () => {
 
-        connected = false;
+        connected =
+          false;
 
         setStatus(
           'partner disconnected'
         );
 
-        showRemoteStream(null);
+        showRemoteVideo(
+          null
+        );
 
       }
     );
@@ -260,12 +325,13 @@
       'error',
       (error) => {
 
-        console.error(
-          'Data connection error:',
+        console.warn(
+          'Co-op connection error:',
           error
         );
 
-        connected = false;
+        connected =
+          false;
 
         setStatus(
           'connection issue'
@@ -273,22 +339,26 @@
 
       }
     );
+
   }
 
 
   /* =====================================================
-     DATA EVENTS
+     DATA HANDLER
      ===================================================== */
 
   function handleData(data) {
 
     if (
       !data ||
-      typeof data !== 'object'
+      typeof data !==
+      'object'
     ) {
       return;
     }
 
+
+    /* Handshake */
 
     if (
       data.type ===
@@ -309,7 +379,7 @@
     ) {
 
       setStatus(
-        'connected',
+        'together',
         true
       );
 
@@ -317,20 +387,33 @@
     }
 
 
+    /* Filter sync */
+
     if (
       data.type ===
       'filter'
     ) {
 
-      if (
-        window.CameraBooth &&
-        typeof window.CameraBooth.setFilter ===
-        'function'
-      ) {
+      try {
 
-        window.CameraBooth.setFilter(
-          data.filter,
-          false
+        if (
+          window.CameraBooth &&
+          typeof window.CameraBooth.setFilter ===
+          'function'
+        ) {
+
+          window.CameraBooth.setFilter(
+            data.filter,
+            false
+          );
+
+        }
+
+      } catch (error) {
+
+        console.warn(
+          'Remote filter error:',
+          error
         );
 
       }
@@ -339,16 +422,22 @@
     }
 
 
+    /* Synchronized capture */
+
     if (
       data.type ===
       'capture'
     ) {
 
-      takeCoopPhoto(false);
+      captureLocally(
+        false
+      );
 
       return;
     }
 
+
+    /* Partner photo */
 
     if (
       data.type ===
@@ -356,7 +445,8 @@
     ) {
 
       partnerPhoto =
-        data.data || null;
+        data.data ||
+        null;
 
 
       if (
@@ -383,34 +473,42 @@
 
   async function createRoom() {
 
-    if (connecting) {
+    if (destroyed) {
       return;
     }
 
-    if (!window.Peer) {
+    if (
+      typeof window.Peer !==
+      'function'
+    ) {
 
       alert(
-        'PeerJS could not load. Check your internet connection and reload the page.'
+        'The co-op connection service could not load. Please check your internet connection and reload the page.'
       );
 
       return;
     }
 
 
-    isHost = true;
-    connecting = true;
+    if (peer) {
+      cleanupConnection();
+    }
+
+
+    isHost =
+      true;
+
+    connected =
+      false;
+
 
     roomCode =
-      makeRoomCode();
+      generateRoomCode();
 
 
-    const roomField =
-      $('roomCode');
-
-    if (roomField) {
-      roomField.value =
-        roomCode;
-    }
+    setRoomCode(
+      roomCode
+    );
 
 
     setStatus(
@@ -420,33 +518,13 @@
 
     try {
 
-      /*
-        Randomness is built into the room code.
-        The host peer ID is therefore very unlikely
-        to collide with another active room.
-      */
-
       peer =
-        new Peer(
-          hostPeerId(roomCode),
+        new window.Peer(
+          roomPeerId(
+            roomCode
+          ),
           {
-            debug: 2,
-
-            /*
-              Explicit STUN server.
-              PeerJS already supplies a default STUN
-              configuration, but keeping it explicit
-              makes the connection configuration clear.
-            */
-
-            config: {
-              iceServers: [
-                {
-                  urls:
-                    'stun:stun.l.google.com:19302'
-                }
-              ]
-            }
+            debug: 0
           }
         );
 
@@ -455,31 +533,30 @@
         'open',
         async () => {
 
-          connecting = false;
-
           setStatus(
             'waiting for Satviki',
             true
           );
 
 
+          /*
+            Camera permission is requested only
+            after user explicitly creates the room.
+          */
+
           try {
 
-            /*
-              Ask for host camera permission now.
-            */
-
-            await getLocalStream();
+            await getCamera();
 
           } catch (error) {
 
-            console.error(
-              'Host camera error:',
+            console.warn(
+              'Host camera unavailable:',
               error
             );
 
             alert(
-              'Camera access is required for the co-op booth. Please allow camera access and create the room again.'
+              'Camera access is needed for the co-op booth. You can still use the normal photo booth.'
             );
 
           }
@@ -488,19 +565,11 @@
       );
 
 
-      /*
-        Guest's data connection arrives here.
-      */
-
       peer.on(
         'connection',
         (conn) => {
 
-          setStatus(
-            'partner joining...'
-          );
-
-          setupDataConnection(
+          setupConnection(
             conn
           );
 
@@ -508,17 +577,12 @@
       );
 
 
-      /*
-        Guest's one and only media call
-        arrives here.
-      */
-
       peer.on(
         'call',
-        async (call) => {
+        (incomingCall) => {
 
-          await answerGuestCall(
-            call
+          answerCall(
+            incomingCall
           );
 
         }
@@ -529,47 +593,38 @@
         'error',
         (error) => {
 
-          console.error(
+          console.warn(
             'PeerJS host error:',
             error
           );
 
-          connecting = false;
-
-
           if (
-            error.type ===
+            error?.type ===
             'unavailable-id'
           ) {
 
             setStatus(
-              'room unavailable'
+              'room retry'
             );
 
-            alert(
-              'That room code was already in use. Please create the room again.'
+            setTimeout(
+              () => {
+
+                if (!destroyed) {
+                  createRoom();
+                }
+
+              },
+              350
             );
 
           } else {
 
             setStatus(
-              error.type ||
               'connection issue'
             );
 
           }
-
-        }
-      );
-
-
-      peer.on(
-        'disconnected',
-        () => {
-
-          setStatus(
-            'signaling disconnected'
-          );
 
         }
       );
@@ -582,10 +637,8 @@
         error
       );
 
-      connecting = false;
-
       setStatus(
-        'could not create room'
+        'co-op unavailable'
       );
 
     }
@@ -599,52 +652,52 @@
 
   async function joinRoom() {
 
-    if (connecting) {
+    if (destroyed) {
       return;
     }
-
-    if (!window.Peer) {
-
-      alert(
-        'PeerJS could not load. Check your internet connection and reload the page.'
-      );
-
-      return;
-    }
-
-
-    const roomField =
-      $('roomCode');
-
-
-    roomCode =
-      cleanCode(
-        roomField?.value
-      );
-
-
-    if (roomField) {
-      roomField.value =
-        roomCode;
-    }
-
 
     if (
-      roomCode.length !== 6
+      typeof window.Peer !==
+      'function'
     ) {
 
       alert(
-        'Enter the complete 6-character room code.'
+        'The co-op connection service could not load. Please check your internet connection and reload the page.'
       );
-
-      roomField?.focus();
 
       return;
     }
 
 
-    isHost = false;
-    connecting = true;
+    roomCode =
+      getRoomCode();
+
+
+    if (
+      roomCode.length !==
+      6
+    ) {
+
+      alert(
+        'Please enter the complete 6-character room code.'
+      );
+
+      getRoomInput()?.focus();
+
+      return;
+    }
+
+
+    if (peer) {
+      cleanupConnection();
+    }
+
+
+    isHost =
+      false;
+
+    connected =
+      false;
 
 
     setStatus(
@@ -655,24 +708,12 @@
     try {
 
       /*
-        Guest uses a RANDOM peer ID.
-
-        This is important because only the host
-        uses the predictable room-based ID.
+        Guest receives a random PeerJS ID.
       */
 
       peer =
-        new Peer({
-          debug: 2,
-
-          config: {
-            iceServers: [
-              {
-                urls:
-                  'stun:stun.l.google.com:19302'
-              }
-            ]
-          }
+        new window.Peer({
+          debug: 0
         });
 
 
@@ -682,53 +723,45 @@
 
           try {
 
-            await getLocalStream();
+            await getCamera();
 
           } catch (error) {
 
-            console.error(
-              'Guest camera error:',
+            console.warn(
+              'Guest camera unavailable:',
               error
             );
 
-            connecting = false;
-
             alert(
-              'Camera access is required for the co-op booth. Please allow camera access and try again.'
+              'Please allow camera access for the co-op booth.'
             );
 
             return;
           }
 
 
-          /*
-            Connect guest -> host.
-          */
-
           const conn =
             peer.connect(
-              hostPeerId(roomCode),
+              roomPeerId(
+                roomCode
+              ),
               {
-                reliable: true,
-
-                serialization: 'json'
+                reliable: true
               }
             );
 
 
           if (!conn) {
 
-            connecting = false;
-
             setStatus(
-              'could not connect'
+              'room unavailable'
             );
 
             return;
           }
 
 
-          setupDataConnection(
+          setupConnection(
             conn
           );
 
@@ -736,18 +769,12 @@
       );
 
 
-      /*
-        Guest can also receive the host's
-        media call if the browser/network
-        establishes it.
-      */
-
       peer.on(
         'call',
-        async (call) => {
+        (incomingCall) => {
 
-          await answerGuestCall(
-            call
+          answerCall(
+            incomingCall
           );
 
         }
@@ -758,16 +785,14 @@
         'error',
         (error) => {
 
-          console.error(
-            'PeerJS guest error:',
+          console.warn(
+            'PeerJS join error:',
             error
           );
 
-          connecting = false;
-
 
           if (
-            error.type ===
+            error?.type ===
             'peer-unavailable'
           ) {
 
@@ -776,29 +801,16 @@
             );
 
             alert(
-              'Room not found. Ask the host to create a fresh room and send you the new code.'
+              'Room not found. Create a new room and send the new code.'
             );
 
           } else {
 
             setStatus(
-              error.type ||
               'connection issue'
             );
 
           }
-
-        }
-      );
-
-
-      peer.on(
-        'disconnected',
-        () => {
-
-          setStatus(
-            'signaling disconnected'
-          );
 
         }
       );
@@ -811,8 +823,6 @@
         error
       );
 
-      connecting = false;
-
       setStatus(
         'join failed'
       );
@@ -823,10 +833,10 @@
 
 
   /* =====================================================
-     GUEST STARTS VIDEO CALL
+     VIDEO CALL
      ===================================================== */
 
-  async function startGuestVideoCall() {
+  async function startGuestCall() {
 
     if (
       isHost ||
@@ -838,13 +848,9 @@
     }
 
 
-    /*
-      Don't create another call if one already exists.
-    */
-
     if (
-      mediaCall &&
-      !mediaCall.destroyed
+      call &&
+      !call.destroyed
     ) {
       return;
     }
@@ -853,44 +859,30 @@
     try {
 
       const stream =
-        await getLocalStream();
+        await getCamera();
 
 
-      setStatus(
-        'starting camera link...',
-        true
-      );
-
-
-      const call =
+      call =
         peer.call(
-          hostPeerId(roomCode),
-          stream,
-          {
-            metadata: {
-              room: 'satviki-coop',
-              code: roomCode
-            }
-          }
+          roomPeerId(
+            roomCode
+          ),
+          stream
         );
 
 
       if (!call) {
         throw new Error(
-          'PeerJS media call could not be created.'
+          'Unable to create video call.'
         );
       }
-
-
-      mediaCall =
-        call;
 
 
       call.on(
         'stream',
         (stream) => {
 
-          showRemoteStream(
+          showRemoteVideo(
             stream
           );
 
@@ -907,10 +899,10 @@
         'close',
         () => {
 
-          mediaCall =
+          call =
             null;
 
-          showRemoteStream(
+          showRemoteVideo(
             null
           );
 
@@ -922,13 +914,10 @@
         'error',
         (error) => {
 
-          console.error(
-            'Guest media error:',
+          console.warn(
+            'Guest call error:',
             error
           );
-
-          mediaCall =
-            null;
 
           setStatus(
             'video connection issue'
@@ -940,8 +929,8 @@
 
     } catch (error) {
 
-      console.error(
-        'Guest call failed:',
+      console.warn(
+        'Guest video call failed:',
         error
       );
 
@@ -954,37 +943,30 @@
   }
 
 
-  /* =====================================================
-     HOST ANSWERS VIDEO CALL
-     ===================================================== */
-
-  async function answerGuestCall(call) {
+  async function answerCall(
+    incomingCall
+  ) {
 
     try {
 
       const stream =
-        await getLocalStream();
+        await getCamera();
 
 
-      /*
-        Host answers instead of starting another
-        call. This avoids offer/answer collisions.
-      */
-
-      call.answer(
+      incomingCall.answer(
         stream
       );
 
 
-      mediaCall =
-        call;
+      call =
+        incomingCall;
 
 
-      call.on(
+      incomingCall.on(
         'stream',
         (stream) => {
 
-          showRemoteStream(
+          showRemoteVideo(
             stream
           );
 
@@ -997,14 +979,14 @@
       );
 
 
-      call.on(
+      incomingCall.on(
         'close',
         () => {
 
-          mediaCall =
+          call =
             null;
 
-          showRemoteStream(
+          showRemoteVideo(
             null
           );
 
@@ -1012,17 +994,14 @@
       );
 
 
-      call.on(
+      incomingCall.on(
         'error',
         (error) => {
 
-          console.error(
-            'Host media error:',
+          console.warn(
+            'Host call error:',
             error
           );
-
-          mediaCall =
-            null;
 
           setStatus(
             'video connection issue'
@@ -1034,13 +1013,13 @@
 
     } catch (error) {
 
-      console.error(
-        'Could not answer guest call:',
+      console.warn(
+        'Could not answer video call:',
         error
       );
 
       setStatus(
-        'camera connection issue'
+        'camera issue'
       );
 
     }
@@ -1052,7 +1031,9 @@
      FILTER SYNC
      ===================================================== */
 
-  function syncFilter(filter) {
+  function syncFilter(
+    filter
+  ) {
 
     if (!connected) {
       return;
@@ -1067,14 +1048,14 @@
 
 
   /* =====================================================
-     CO-OP PHOTO
+     CAPTURE
      ===================================================== */
 
-  async function takeCoopPhoto(
-    broadcast = true
+  async function captureLocally(
+    tellPartner = true
   ) {
 
-    if (captureRunning) {
+    if (captureInProgress) {
       return;
     }
 
@@ -1084,24 +1065,17 @@
       !connection?.open
     ) {
 
-      alert(
-        'Satviki needs to be connected before taking a co-op photo.'
-      );
-
       return;
     }
 
 
-    captureRunning = true;
+    captureInProgress =
+      true;
 
 
     try {
 
-      /*
-        Host initiates synchronized capture.
-      */
-
-      if (broadcast) {
+      if (tellPartner) {
 
         const sent =
           send({
@@ -1109,13 +1083,9 @@
           });
 
         if (!sent) {
-
-          alert(
-            'The co-op connection is not ready yet.'
-          );
-
           return;
         }
+
       }
 
 
@@ -1125,8 +1095,7 @@
         'function'
       ) {
 
-        await window.CameraBooth
-          .captureNow();
+        await window.CameraBooth.captureNow();
 
       }
 
@@ -1147,16 +1116,12 @@
       });
 
 
-      /*
-        Host waits for guest photo.
-      */
-
       if (
         isHost &&
         partnerPhoto
       ) {
 
-        await createCombinedPhoto(
+        createCombinedPhoto(
           myPhoto,
           partnerPhoto
         );
@@ -1166,8 +1131,8 @@
 
     } catch (error) {
 
-      console.error(
-        'Co-op photo error:',
+      console.warn(
+        'Co-op capture failed:',
         error
       );
 
@@ -1175,9 +1140,10 @@
 
       setTimeout(
         () => {
-          captureRunning = false;
+          captureInProgress =
+            false;
         },
-        800
+        900
       );
 
     }
@@ -1186,39 +1152,113 @@
 
 
   /* =====================================================
-     IMAGE LOADING
+     COMBINED PHOTO
      ===================================================== */
 
-  function loadImage(src) {
+  function loadImage(
+    source
+  ) {
 
     return new Promise(
       (resolve, reject) => {
 
-        const image =
+        const img =
           new Image();
 
-        image.onload =
-          () => resolve(image);
+        img.onload =
+          () => resolve(img);
 
-        image.onerror =
+        img.onerror =
           () =>
             reject(
               new Error(
-                'Unable to load photo.'
+                'Image failed to load'
               )
             );
 
-        image.src =
-          src;
+        img.src =
+          source;
+
       }
     );
 
   }
 
 
-  /* =====================================================
-     COMBINE BOTH PHOTOS
-     ===================================================== */
+  function drawCover(
+    ctx,
+    image,
+    x,
+    y,
+    width,
+    height
+  ) {
+
+    const sourceRatio =
+      image.width /
+      image.height;
+
+    const targetRatio =
+      width /
+      height;
+
+    let sourceWidth =
+      image.width;
+
+    let sourceHeight =
+      image.height;
+
+    let sourceX =
+      0;
+
+    let sourceY =
+      0;
+
+
+    if (
+      sourceRatio >
+      targetRatio
+    ) {
+
+      sourceWidth =
+        image.height *
+        targetRatio;
+
+      sourceX =
+        (
+          image.width -
+          sourceWidth
+        ) / 2;
+
+    } else {
+
+      sourceHeight =
+        image.width /
+        targetRatio;
+
+      sourceY =
+        (
+          image.height -
+          sourceHeight
+        ) / 2;
+
+    }
+
+
+    ctx.drawImage(
+      image,
+      sourceX,
+      sourceY,
+      sourceWidth,
+      sourceHeight,
+      x,
+      y,
+      width,
+      height
+    );
+
+  }
+
 
   async function createCombinedPhoto(
     firstSource,
@@ -1227,14 +1267,15 @@
 
     try {
 
-      const [
-        first,
-        second
-      ] =
-        await Promise.all([
-          loadImage(firstSource),
-          loadImage(secondSource)
-        ]);
+      const first =
+        await loadImage(
+          firstSource
+        );
+
+      const second =
+        await loadImage(
+          secondSource
+        );
 
 
       const canvas =
@@ -1247,25 +1288,33 @@
           '2d'
         );
 
-
       if (!ctx) {
         return;
       }
 
 
-      const width = 1400;
-      const height = 900;
+      const width =
+        1400;
 
-      const padding = 35;
-      const header = 90;
-      const footer = 55;
+      const height =
+        900;
 
-      const panelWidth =
-        (width -
-          padding * 3) /
-        2;
+      const padding =
+        30;
 
-      const panelHeight =
+      const header =
+        85;
+
+      const footer =
+        50;
+
+      const photoWidth =
+        (
+          width -
+          padding * 3
+        ) / 2;
+
+      const photoHeight =
         height -
         header -
         footer -
@@ -1311,8 +1360,8 @@
         first,
         padding,
         header,
-        panelWidth,
-        panelHeight
+        photoWidth,
+        photoHeight
       );
 
 
@@ -1320,10 +1369,10 @@
         ctx,
         second,
         padding * 2 +
-          panelWidth,
+          photoWidth,
         header,
-        panelWidth,
-        panelHeight
+        photoWidth,
+        photoHeight
       );
 
 
@@ -1331,12 +1380,12 @@
         '#a85d69';
 
       ctx.font =
-        'italic 22px Georgia';
+        'italic 21px Georgia';
 
       ctx.fillText(
-        'made in the co-op booth',
+        'made in our little photo booth',
         width / 2,
-        height - 22
+        height - 20
       );
 
 
@@ -1347,148 +1396,67 @@
         );
 
 
-      window.CameraBooth?.showResult(
+      window.CameraBooth?.showResult?.(
         result
       );
 
-      window.CameraBooth?.setLastPhoto(
+      window.CameraBooth?.setLastPhoto?.(
         result
       );
 
 
-      const download =
+      const link =
         document.createElement(
           'a'
         );
 
-      download.href =
+      link.href =
         result;
 
-      download.download =
+      link.download =
         'satviki-co-op-photo.jpg';
 
       document.body.appendChild(
-        download
+        link
       );
 
-      download.click();
+      link.click();
 
-      download.remove();
+      link.remove();
 
 
       partnerPhoto =
         null;
 
+
     } catch (error) {
 
-      console.error(
-        'Combined photo error:',
+      console.warn(
+        'Combined photo creation failed:',
         error
       );
 
-      alert(
-        'Both photos were received, but the combined photo could not be created.'
-      );
-
     }
-
-  }
-
-
-  function drawCover(
-    ctx,
-    image,
-    x,
-    y,
-    width,
-    height
-  ) {
-
-    const sourceRatio =
-      image.width /
-      image.height;
-
-    const targetRatio =
-      width /
-      height;
-
-    let sourceWidth =
-      image.width;
-
-    let sourceHeight =
-      image.height;
-
-    let sourceX = 0;
-    let sourceY = 0;
-
-
-    if (
-      sourceRatio >
-      targetRatio
-    ) {
-
-      sourceWidth =
-        image.height *
-        targetRatio;
-
-      sourceX =
-        (
-          image.width -
-          sourceWidth
-        ) / 2;
-
-    } else {
-
-      sourceHeight =
-        image.width /
-        targetRatio;
-
-      sourceY =
-        (
-          image.height -
-          sourceHeight
-        ) / 2;
-    }
-
-
-    ctx.drawImage(
-      image,
-
-      sourceX,
-      sourceY,
-      sourceWidth,
-      sourceHeight,
-
-      x,
-      y,
-      width,
-      height
-    );
 
   }
 
 
   /* =====================================================
-     COPY ROOM
+     COPY ROOM CODE
      ===================================================== */
 
-  async function copyRoom() {
-
-    const field =
-      $('roomCode');
-
-    const button =
-      $('copyRoom');
+  async function copyRoomCode() {
 
     const code =
-      cleanCode(
-        field?.value
-      );
-
+      getRoomCode();
 
     if (!code) {
       return;
     }
+
+
+    const button =
+      $('copyRoom');
 
 
     try {
@@ -1500,7 +1468,7 @@
 
       if (button) {
 
-        const previous =
+        const oldText =
           button.textContent;
 
         button.textContent =
@@ -1509,19 +1477,23 @@
         setTimeout(
           () => {
             button.textContent =
-              previous;
+              oldText;
           },
           1200
         );
 
       }
 
-    } catch (error) {
 
-      if (field) {
+    } catch (_) {
 
-        field.focus();
-        field.select();
+      const input =
+        getRoomInput();
+
+      if (input) {
+
+        input.focus();
+        input.select();
 
         try {
           document.execCommand(
@@ -1537,10 +1509,60 @@
 
 
   /* =====================================================
+     CAPTURE BUTTON INTEGRATION
+     ===================================================== */
+
+  function setupCaptureButton() {
+
+    const button =
+      $('captureBtn');
+
+    if (!button) {
+      return;
+    }
+
+
+    /*
+      We use ONE capturing listener.
+
+      When not connected:
+      normal camera.js works normally.
+
+      When connected:
+      the normal camera capture is stopped and
+      the synchronized co-op capture is used.
+    */
+
+    button.addEventListener(
+      'click',
+      (event) => {
+
+        if (
+          connected &&
+          connection?.open
+        ) {
+
+          event.preventDefault();
+          event.stopImmediatePropagation();
+
+          captureLocally(
+            isHost
+          );
+
+        }
+
+      },
+      true
+    );
+
+  }
+
+
+  /* =====================================================
      CLEANUP
      ===================================================== */
 
-  function destroy() {
+  function cleanupConnection() {
 
     try {
 
@@ -1553,8 +1575,8 @@
 
     try {
 
-      if (mediaCall) {
-        mediaCall.close();
+      if (call) {
+        call.close();
       }
 
     } catch (_) {}
@@ -1567,7 +1589,9 @@
         localStream
           .getTracks()
           .forEach(
-            track => track.stop()
+            (track) => {
+              track.stop();
+            }
           );
 
       }
@@ -1584,25 +1608,27 @@
     } catch (_) {}
 
 
-    connection = null;
-    mediaCall = null;
-    localStream = null;
-    peer = null;
+    connection =
+      null;
 
-    connected = false;
-    connecting = false;
+    call =
+      null;
 
-    myPhoto = null;
-    partnerPhoto = null;
+    peer =
+      null;
 
-    showRemoteStream(
-      null
-    );
+    localStream =
+      null;
 
-    setStatus(
-      'offline',
-      false
-    );
+    connected =
+      false;
+
+    myPhoto =
+      null;
+
+    partnerPhoto =
+      null;
+
   }
 
 
@@ -1612,55 +1638,57 @@
 
   function init() {
 
-    $('createRoom')
-      ?.addEventListener(
-        'click',
-        createRoom
-      );
+    try {
+
+      $('createRoom')
+        ?.addEventListener(
+          'click',
+          createRoom
+        );
 
 
-    $('joinRoom')
-      ?.addEventListener(
-        'click',
-        joinRoom
-      );
+      $('joinRoom')
+        ?.addEventListener(
+          'click',
+          joinRoom
+        );
 
 
-    $('copyRoom')
-      ?.addEventListener(
-        'click',
-        copyRoom
-      );
+      $('copyRoom')
+        ?.addEventListener(
+          'click',
+          copyRoomCode
+        );
 
 
-    $('roomCode')
-      ?.addEventListener(
+      const input =
+        $('roomCode');
+
+
+      input?.addEventListener(
         'input',
         () => {
 
-          const field =
-            $('roomCode');
-
-          if (field) {
-
-            field.value =
-              cleanCode(
-                field.value
-              );
-
-          }
+          input.value =
+            input.value
+              .toUpperCase()
+              .replace(
+                /[^A-Z0-9]/g,
+                ''
+              )
+              .slice(0, 6);
 
         }
       );
 
 
-    $('roomCode')
-      ?.addEventListener(
+      input?.addEventListener(
         'keydown',
         (event) => {
 
           if (
-            event.key === 'Enter'
+            event.key ===
+            'Enter'
           ) {
 
             event.preventDefault();
@@ -1673,29 +1701,47 @@
       );
 
 
-    /*
-      IMPORTANT:
-      Do not attach another capture listener here.
-
-      The normal camera button is handled by camera.js.
-      The co-op button should be wired separately if you
-      want the normal capture button to become co-op-aware.
-    */
+      setupCaptureButton();
 
 
-    setStatus(
-      'offline',
-      false
-    );
+      setStatus(
+        'offline',
+        false
+      );
 
 
-    window.addEventListener(
-      'beforeunload',
-      destroy
-    );
+      window.addEventListener(
+        'beforeunload',
+        cleanupConnection
+      );
+
+
+    } catch (error) {
+
+      /*
+        Most important safety rule:
+        a co-op failure must NEVER stop
+        the rest of the anniversary website.
+      */
+
+      console.warn(
+        'Co-op initialization failed:',
+        error
+      );
+
+      setStatus(
+        'offline',
+        false
+      );
+
+    }
 
   }
 
+
+  /* =====================================================
+     PUBLIC API
+     ===================================================== */
 
   window.CoopBooth = {
 
@@ -1704,9 +1750,10 @@
     syncFilter,
 
     startSynchronizedCapture:
-      takeCoopPhoto,
+      captureLocally,
 
-    destroy
+    destroy:
+      cleanupConnection
 
   };
 
